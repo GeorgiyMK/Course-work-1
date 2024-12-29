@@ -46,11 +46,16 @@ class WorkPHOTO:
         return response['response']['items']
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
+        if exc_type is IndexError:
+            print(f'Произошла ошибка {exc_val}')
+        return False
 
 with WorkPHOTO(access_token,user_id, version = '5.199') as photos:
     for photo in photos:
-        pprint(photo)
+        if 'sizes' in photo:
+            for size in photo['sizes']:
+                if size['type'] == 'w':
+                    print(size['type'], size['url'])
 
 
 
