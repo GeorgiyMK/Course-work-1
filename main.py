@@ -52,6 +52,7 @@ class WorkPHOTO:
 
 with WorkPHOTO(access_token,user_id, version = '5.199') as photos:
     for photo in photos:
+        pprint(photo['likes']['count'])
         if 'sizes' in photo:
             for size in photo['sizes']:
                 if size['type'] == 'w':
