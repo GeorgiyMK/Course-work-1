@@ -70,7 +70,8 @@ class UPYADI:
             response = requests.post(self.upl_ya_url, headers = self.headers, params = params)
             upload_url = response.json()['href']
             requests.put(upload_url, params = params)
-            # pprint(response.json())
+            if response.status_code != 202:
+                print(f"Ошибка загрузки файла {filename}: {response.json()}")
 
 class WorkPHOTO:
 
@@ -80,7 +81,14 @@ class WorkPHOTO:
 
     def __enter__(self):
         response = self.vk.get_photo()
-        return response['response']['items']
+        if response and 'response' in response:
+            return response['response']['items']
+        elif 'error' in response:
+            print(f"Ошибка VK API: {response['error']['error_msg']}")
+        else:
+            print("Неожиданный ответ от VK API:")
+            pprint(response)
+        return []
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is IndexError:
@@ -89,11 +97,8 @@ class WorkPHOTO:
 
 with WorkPHOTO(access_token,user_id, version = '5.199') as photos:
     for_write = []
-    count = 0
-    for photo in photos:
-        if count >= 5:
-            break
-        # pprint(photo)
+    photos_with_resolution = []
+    for photo in photos[:45]:
         photo_info = {}
         likes_count = photo['likes']['count'] if 'likes' in photo and 'count' in photo['likes'] else 0
         if any(item['file_name'] == likes_count for item in for_write):
@@ -101,26 +106,28 @@ with WorkPHOTO(access_token,user_id, version = '5.199') as photos:
         else:
             photo_info['file_name'] = likes_count
         if 'sizes' in photo:
-            for size in photo['sizes']:
-                if size['type'] == 'w' and size.get('url'):
-                    photo_info['size'] = size['type']
-                    photo_info['url'] = size['url']
-                    break
-            else:
-                photo_info['size'] = None
+            max_size_photo = max(photo['sizes'], key=lambda size: size.get('width', 0) * size.get('height', 0))
+            photos_with_resolution.append({
+                'likes': photo['likes']['count'] if 'likes' in photo and 'count' in photo['likes'] else 0,
+                'date': photo['date'],
+                'resolution': max_size_photo.get('width', 0) * max_size_photo.get('height', 0),
+                'url': max_size_photo.get('url', None)
+            })
         else:
             photo_info['size'] = None
+            photo_info['url'] = None
 
-        if photo_info.get('url'):
-            for_write.append(photo_info)
-            count += 1
+    sorted_photos = sorted(photos_with_resolution, key=lambda x: x['resolution'], reverse=True)
+    top_photos = sorted_photos[:3]
+for photo in top_photos:
+        photo_info = {
+            'file_name': f"{photo['likes']}_{photo['date']}",
+            'url': photo['url']
+        }
+        for_write.append(photo_info)
 
 with open('info.json', 'w', encoding='utf-8') as json_file:
     json.dump(for_write, json_file, indent=4, ensure_ascii=False)
 
-with open(r'info.json', encoding='utf-8') as f:
-    info_list = json.load(f)
-
-vk = VK(access_token, user_id)
 uploader = UPYADI(YA_TOKEN)
-uploader.upload_photos(info_list, folder_name='IMAGES_COURSE_WORK')
+uploader.upload_photos(for_write, folder_name='IMAGES_COURSE_WORK')
